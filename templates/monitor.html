@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="admin-container">
+
+<h2>Private Messages</h2>
+{% for sender,receiver,message in dms %}
+<p><strong>{{ sender }} → {{ receiver }}</strong>: {{ message }}</p>
+{% endfor %}
+
+<h2>Group Messages</h2>
+{% for group,sender,message in groups %}
+<p><strong>{{ group }} | {{ sender }}</strong>: {{ message }}</p>
+{% endfor %}
+
+<a href="/" class="back-btn">Back</a>
+</div>
+
+</body>
+</html>

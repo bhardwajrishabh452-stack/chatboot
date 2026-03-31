@@ -1,101 +1,314 @@
-import os
-from flask import Flask, render_template, request, redirect, session, url_for
-from flask_sqlalchemy import SQLAlchemy
+from flask import Flask, render_template, request, redirect, session, url_for, flash
 from flask_socketio import SocketIO, join_room, emit
-from datetime import datetime, timedelta
+from werkzeug.security import generate_password_hash, check_password_hash
+from functools import wraps
+import sqlite3
+from contextlib import closing
 
 app = Flask(__name__)
-app.secret_key = "secretkey123"
+app.secret_key = "super_secret_key"
+socketio = SocketIO(app, async_mode="threading")
 
-# Create a folder for the database if it doesn't exist
-db_folder = os.path.join(os.path.abspath(os.path.dirname(__file__)), "database")
-os.makedirs(db_folder, exist_ok=True)
+DATABASE = "database.db"
 
-# Absolute path to SQLite DB
-db_path = os.path.join(db_folder, "chat.db")
-app.config['SQLALCHEMY_DATABASE_URI'] = f"sqlite:///{db_path}"
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-db = SQLAlchemy(app)
-socketio = SocketIO(app)
+# ================= DATABASE =================
+def get_db():
+    conn = sqlite3.connect(DATABASE)
+    conn.row_factory = sqlite3.Row
+    return conn
 
-# User and Message models
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(50), unique=True, nullable=False)
-    email = db.Column(db.String(100), nullable=False)
-    password = db.Column(db.String(100), nullable=False)
 
-class Message(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    sender = db.Column(db.String(50), nullable=False)
-    receiver = db.Column(db.String(50), nullable=False)
-    text = db.Column(db.Text, nullable=False)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+def init_db():
+    with closing(get_db()) as conn:
+        cur = conn.cursor()
 
-# Create tables safely inside app context
-with app.app_context():
-    db.create_all()
+        # USERS
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS users(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE,
+            email TEXT UNIQUE,
+            password TEXT,
+            role TEXT
+        )
+        """)
 
-# Login Route
-@app.route("/", methods=["GET", "POST"])
-def login():
-    if request.method == "POST":
-        user = User.query.filter_by(username=request.form['username']).first()
-        if user and user.password == request.form['password']:
-            session['user'] = user.username
-            return redirect(url_for('chat'))
-        else:
-            return render_template("login.html", error="Incorrect username or password")
-    return render_template("login.html")
+        # GROUPS
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS groups(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT UNIQUE,
+            created_by TEXT
+        )
+        """)
 
-# Register Route
+        # GROUP MEMBERS
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS group_members(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_name TEXT,
+            username TEXT
+        )
+        """)
+
+        # GROUP MESSAGES
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS group_messages(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            group_name TEXT,
+            sender TEXT,
+            message TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+
+        # ✅ PRIVATE MESSAGES (FIX)
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS private_messages(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            sender TEXT,
+            receiver TEXT,
+            message TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+        """)
+
+        conn.commit()
+
+
+init_db()
+
+
+# ================= LOGIN REQUIRED =================
+def login_required(f):
+    @wraps(f)
+    def wrap(*args, **kwargs):
+        if "username" not in session:
+            return redirect("/login")
+        return f(*args, **kwargs)
+    return wrap
+
+
+# ================= AUTH =================
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
-        if User.query.filter_by(username=request.form['username']).first():
-            return render_template("register.html", error="Username already exists")
-        new_user = User(
-            username=request.form['username'],
-            email=request.form['email'],
-            password=request.form['password']
-        )
-        db.session.add(new_user)
-        db.session.commit()
-        return redirect(url_for('login'))
+        username = request.form["username"].lower()
+        email = request.form["email"].lower()
+        password = generate_password_hash(request.form["password"])
+
+        with closing(get_db()) as conn:
+            cur = conn.cursor()
+
+            if cur.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone():
+                return "User exists"
+
+            role = "admin" if cur.execute("SELECT COUNT(*) FROM users").fetchone()[0] == 0 else "employee"
+
+            cur.execute("INSERT INTO users(username,email,password,role) VALUES(?,?,?,?)",
+                        (username, email, password, role))
+            conn.commit()
+
+        return redirect("/login")
+
     return render_template("register.html")
 
-# Chat Route
-@app.route("/chat")
-def chat():
-    if 'user' not in session:
-        return redirect(url_for('login'))
-    # Delete messages older than 72 hours
-    expiry = datetime.utcnow() - timedelta(hours=72)
-    Message.query.filter(Message.timestamp < expiry).delete()
-    db.session.commit()
-    messages = Message.query.order_by(Message.timestamp).all()
-    return render_template("chat.html", messages=messages)
 
-# Logout
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form["username"].lower()
+        password = request.form["password"]
+
+        with closing(get_db()) as conn:
+            cur = conn.cursor()
+            cur.execute("SELECT * FROM users WHERE username=?", (username,))
+            user = cur.fetchone()
+
+        if user and check_password_hash(user["password"], password):
+            session["username"] = user["username"]
+            session["role"] = user["role"]
+            return redirect("/")
+
+        return "Invalid login"
+
+    return render_template("login.html")
+
+
 @app.route("/logout")
+@login_required
 def logout():
-    session.pop('user', None)
-    return redirect(url_for('login'))
+    session.clear()
+    return redirect("/login")
 
-# SocketIO
-@socketio.on("join_room")
+
+# ================= HOME =================
+@app.route("/")
+@login_required
+def home():
+    username = session["username"]
+
+    with closing(get_db()) as conn:
+        cur = conn.cursor()
+
+        cur.execute("SELECT username FROM users WHERE username!=?", (username,))
+        users = [u["username"] for u in cur.fetchall()]
+
+        cur.execute("SELECT group_name FROM group_members WHERE username=?", (username,))
+        groups = [g["group_name"] for g in cur.fetchall()]
+
+    return render_template("chat.html",
+                           username=username,
+                           users=users,
+                           groups=groups,
+                           role=session["role"])
+
+
+# ================= ADMIN =================
+@app.route("/admin")
+@login_required
+def admin():
+    if session["role"] != "admin":
+        return "Unauthorized", 403
+
+    with closing(get_db()) as conn:
+        cur = conn.cursor()
+
+        cur.execute("SELECT username, role FROM users")
+        users = cur.fetchall()
+
+        cur.execute("SELECT name FROM groups")
+        groups = [g["name"] for g in cur.fetchall()]
+
+    return render_template("admin.html", users=users, groups=groups)
+
+
+@app.route("/admin/create_group", methods=["POST"])
+@login_required
+def create_group():
+    if session["role"] != "admin":
+        return "Unauthorized", 403
+
+    name = request.form["group_name"]
+
+    with closing(get_db()) as conn:
+        cur = conn.cursor()
+        try:
+            cur.execute("INSERT INTO groups(name,created_by) VALUES(?,?)",
+                        (name, session["username"]))
+            conn.commit()
+        except:
+            pass
+
+    return redirect("/admin")
+
+
+# ================= GROUP CHAT =================
+@app.route("/group/<group_name>")
+@login_required
+def group_chat(group_name):
+    username = session["username"]
+
+    with closing(get_db()) as conn:
+        cur = conn.cursor()
+
+        cur.execute("""
+        SELECT 1 FROM group_members
+        WHERE group_name=? AND username=?
+        """, (group_name, username))
+
+        if not cur.fetchone():
+            return "Access Denied"
+
+        cur.execute("SELECT sender,message FROM group_messages WHERE group_name=?",
+                    (group_name,))
+        messages = cur.fetchall()
+
+    return render_template("group.html",
+                           group=group_name,
+                           username=username,
+                           messages=messages,
+                           room=f"group_{group_name}")
+
+
+# ================= ✅ PRIVATE CHAT (FIXED) =================
+@app.route("/dm/<username>")
+@login_required
+def dm(username):
+    current_user = session["username"]
+
+    with closing(get_db()) as conn:
+        cur = conn.cursor()
+
+        cur.execute("SELECT 1 FROM users WHERE username=?", (username,))
+        if not cur.fetchone():
+            return "User not found"
+
+        cur.execute("""
+        SELECT sender,message FROM private_messages
+        WHERE (sender=? AND receiver=?)
+        OR (sender=? AND receiver=?)
+        ORDER BY timestamp
+        """, (current_user, username, username, current_user))
+
+        messages = cur.fetchall()
+
+    room = f"dm_{current_user}_{username}"
+
+    return render_template("private_chat.html",
+                           username=current_user,
+                           receiver=username,
+                           messages=messages,
+                           room=room)
+
+
+# ================= SOCKET =================
+@socketio.on("join")
 def join(data):
-    join_room(data['room'])
+    join_room(data["room"])
 
+
+# GROUP MESSAGE
 @socketio.on("send_message")
-def handle_message(data):
-    msg = Message(sender=data['user'], receiver=data['room'], text=data['text'])
-    db.session.add(msg)
-    db.session.commit()
-    # Emit message to sender and receiver
-    emit("receive_message", data, room=data['room'])
-    emit("receive_message", data, room=data['user'])
+def send_group(data):
+    room = data["room"]
+    sender = data["sender"]
+    message = data["message"]
 
+    group = room.replace("group_", "")
+
+    with closing(get_db()) as conn:
+        cur = conn.cursor()
+        cur.execute("INSERT INTO group_messages(group_name,sender,message) VALUES(?,?,?)",
+                    (group, sender, message))
+        conn.commit()
+
+    emit("receive_message", data, to=room)
+
+
+# ✅ PRIVATE MESSAGE SOCKET
+@socketio.on("private_message")
+def private_message(data):
+    sender = data["sender"]
+    receiver = data["receiver"]
+    message = data["message"]
+
+    room1 = f"dm_{sender}_{receiver}"
+    room2 = f"dm_{receiver}_{sender}"
+
+    with closing(get_db()) as conn:
+        cur = conn.cursor()
+        cur.execute("""
+        INSERT INTO private_messages(sender,receiver,message)
+        VALUES(?,?,?)
+        """, (sender, receiver, message))
+        conn.commit()
+
+    emit("receive_private_message", data, to=room1)
+    emit("receive_private_message", data, to=room2)
+
+
+# ================= RUN =================
 if __name__ == "__main__":
-    socketio.run(app, debug=True)
+    socketio.run(app, debug=True, port=5050)

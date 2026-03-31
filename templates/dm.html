@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Private Chat</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+</head>
+<body>
+
+<div class="app">
+
+<div class="sidebar-mini">
+<a href="/">⬅ Back</a>
+</div>
+
+<div class="chat-main">
+
+<div class="chat-header">
+Chat with {{ other_user }}
+<span id="typing"></span>
+</div>
+
+<div class="messages" id="messages">
+{% for sender,message in messages %}
+<div class="message {{ 'sent' if sender==username else 'received' }}">
+<strong>{{ sender }}</strong>: {{ message }}
+</div>
+{% endfor %}
+</div>
+
+<div class="chat-input">
+<input id="msg" placeholder="Type message..." oninput="typing('{{ room }}')">
+
+<input type="file" id="fileInput" hidden>
+<button onclick="document.getElementById('fileInput').click()">📎</button>
+
+<button onclick="sendMessage('{{ room }}','{{ username }}')">Send</button>
+</div>
+
+</div>
+</div>
+
+<audio id="notify" src="{{ url_for('static', filename='notify.mp3') }}"></audio>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
+<script>
+initSocket("{{ room }}","{{ username }}");
+</script>
+
+</body>
+</html>

@@ -1,61 +1,62 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Private Chat</title>
+<title>Company Chat</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
-<script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
 </head>
 <body>
-<header>
-    <h3>Private Chat</h3>
-    <form action="{{ url_for('logout') }}" method="get">
-        <button type="submit">Logout</button>
-    </form>
-</header>
 
-<div class="chat-container">
-    <div id="chatBox">
-        {% for msg in messages %}
-        <div class="message {{ 'me' if msg.sender==session['user'] else 'other' }}">
-            {{ msg.sender }}: {{ msg.text }}
-        </div>
-        {% endfor %}
-    </div>
-    <div id="inputArea">
-        <input type="text" id="toUser" placeholder="Send to username..." required>
-        <input type="text" id="message" placeholder="Type a message..." required>
-        <button onclick="sendMessage()">Send</button>
-    </div>
+<div class="app">
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+
+<div class="logo">🏢 CompanyChat</div>
+
+<div class="user-box">
+<img src="{{ url_for('static', filename='default.png') }}" class="avatar">
+<span>{{ username }}</span>
+{% if role == "admin" %}
+<span class="admin-badge">ADMIN</span>
+{% endif %}
 </div>
 
-<script>
-var socket = io();
-socket.emit("join_room", { user: "{{ session['user'] }}", room: "{{ session['user'] }}" });
+<input type="text" id="searchUser" placeholder="Search chat...">
 
-function sendMessage() {
-    let msg = document.getElementById("message").value.trim();
-    let toUser = document.getElementById("toUser").value.trim();
-    if(msg === "" || toUser === "") return;
-    socket.emit("send_message", { user: "{{ session['user'] }}", text: msg, room: toUser });
-    let div = document.createElement("div");
-    div.classList.add("message", "me");
-    div.innerText = "{{ session['user'] }}: " + msg;
-    document.getElementById("chatBox").appendChild(div);
-    document.getElementById("message").value = "";
-    document.getElementById("chatBox").scrollTop = document.getElementById("chatBox").scrollHeight;
-}
+<h4>🟢 Online</h4>
+<div id="onlineUsers"></div>
 
-socket.on("receive_message", function(data){
-    if(data.user !== "{{ session['user'] }}"){
-        let div = document.createElement("div");
-        div.classList.add("message", "other");
-        div.innerText = data.user + ": " + data.text;
-        document.getElementById("chatBox").appendChild(div);
-        document.getElementById("chatBox").scrollTop = document.getElementById("chatBox").scrollHeight;
-    }
-});
-</script>
+<h4>Private</h4>
+{% for user in users %}
+<a href="/dm/{{ user }}">{{ user }}</a>
+{% endfor %}
+
+<h4>Departments</h4>
+{% for group in groups %}
+<a href="/group/{{ group }}">{{ group }}</a>
+{% endfor %}
+
+{% if role == "admin" %}
+<a href="/admin">👑 Admin Panel</a>
+<a href="/monitor">📊 Monitor</a>
+{% endif %}
+
+<button onclick="toggleTheme()">🌙 Toggle Mode</button>
+<a href="/logout" class="logout">Logout</a>
+
+</div>
+
+<!-- MAIN -->
+<div class="main">
+<div class="center-box">
+<h2>Welcome {{ username }}</h2>
+<p>Select a chat from sidebar</p>
+</div>
+</div>
+
+</div>
+
+<script src="{{ url_for('static', filename='script.js') }}"></script>
 </body>
 </html>

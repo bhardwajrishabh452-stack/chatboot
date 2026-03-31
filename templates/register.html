@@ -1,35 +1,47 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Register - Private Chat</title>
+<title>Register</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
-<body>
-<div class="container">
-    <div class="form-box">
-        <h2>Register</h2>
-        {% if error %}
-        <p class="error">{{ error }}</p>
-        {% endif %}
-        <form method="POST">
-            <div class="input-group">
-                <input type="text" name="username" required>
-                <label>Username</label>
-            </div>
-            <div class="input-group">
-                <input type="email" name="email" required>
-                <label>Email</label>
-            </div>
-            <div class="input-group">
-                <input type="password" name="password" required>
-                <label>Password</label>
-            </div>
-            <button type="submit">Register</button>
-            <p>Already have an account? <a href="{{ url_for('login') }}">Login</a></p>
-        </form>
-    </div>
+<body class="auth-body">
+
+<div class="auth-box">
+<h2>Create Account</h2>
+
+{% if error %}
+<div class="alert error">
+    {{ error }}
 </div>
+{% endif %}
+
+<form method="POST">
+<input type="text" name="username"
+       value="{{ request.form.username or '' }}"
+       placeholder="Username" required>
+
+<input type="email" name="email"
+       value="{{ request.form.email or '' }}"
+       placeholder="Email" required>
+
+<div class="password-box">
+<input type="password" id="password" name="password"
+       placeholder="Password" required>
+<span onclick="toggle()">👁</span>
+</div>
+
+<button type="submit">Register</button>
+</form>
+
+<p><a href="{{ url_for('login') }}">Already have account?</a></p>
+</div>
+
+<script>
+function toggle(){
+let p=document.getElementById("password");
+p.type=p.type==="password"?"text":"password";
+}
+</script>
+
 </body>
 </html>
