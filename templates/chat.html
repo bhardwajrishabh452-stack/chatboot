@@ -1,0 +1,300 @@
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+
+<div class="app-container">
+
+    <!-- ===== SIDEBAR ===== -->
+    <div class="sidebar">
+
+        <!-- PROFILE -->
+        <div class="profile">
+            <div class="avatar">
+                {{ session.get('username')[0] | upper }}
+            </div>
+            <div>
+                <h3>{{ session.get('username') }}</h3>
+                <span class="status">● Online</span>
+            </div>
+        </div>
+
+        <!-- MENU -->
+        <div class="menu">
+            <a href="{{ url_for('chat_section', section='chat') }}">💬 Chat</a>
+
+            {% if session.get('role') in ['admin', 'superadmin'] %}
+            <a href="{{ url_for('chat_section', section='admin') }}">All Users</a>
+            {% endif %}
+
+            <a href="{{ url_for('chat_section', section='team') }}">👥 Team</a>
+            <a class="logout" href="{{ url_for('logout') }}">🚪 Logout</a>
+        </div>
+
+        <!-- CREATE TEAM -->
+        {% if session.get('role') in ['admin', 'superadmin'] %}
+        <form method="POST" action="{{ url_for('create_team') }}" class="team-form">
+            <input type="text" name="team_name" placeholder="Enter team name" required>
+            <button type="submit">+ Create Team</button>
+        </form>
+        {% endif %}
+
+        <!-- SEARCH -->
+        <div class="user-search">
+            <input type="text" id="searchUser" placeholder="🔍 Search users..." onkeyup="filterUsers()">
+        </div>
+
+        <h4>All Users</h4>
+
+        <!-- USER LIST -->
+        <div id="userList">
+            {% for user in users %}
+            {% if user['username'] != session.get('username') %}
+            <div class="user-item">
+                {{ user['username'] }}
+            </div>
+            {% endif %}
+            {% endfor %}
+        </div>
+
+    </div>
+
+
+    <!-- ===== RIGHT SIDE CONTENT ===== -->
+    <div class="main-content">
+
+        {% if section == "chat" %}
+        <h2>Private Chat</h2>
+
+        <div class="chat-box">
+            {% for msg in messages %}
+            <div class="message">
+                <strong>{{ msg['sender'] }}</strong>: {{ msg['message'] }}
+            </div>
+            {% else %}
+            <p>No messages yet.</p>
+            {% endfor %}
+        </div>
+
+        <form method="POST" action="{{ url_for('chat_section', section='chat') }}">
+            <select name="receiver" required>
+                {% for user in users %}
+                <option value="{{ user['username'] }}">
+                    {{ user['username'] }}
+                </option>
+                {% endfor %}
+            </select>
+
+            <input type="text" name="message" placeholder="Type message..." required>
+            <button type="submit">Send</button>
+        </form>
+        {% endif %}
+        {% if section == "admin" %}
+        <h2>Admin Dashboard</h2>
+
+        <!-- ===== STATS ===== -->
+        <div class="stats">
+            <div class="card">
+                <h3>{{ total_users }}</h3>
+                <p>Total Users</p>
+            </div>
+
+            <div class="card">
+                <h3>{{ active_users }}</h3>
+                <p>Active Users</p>
+            </div>
+        </div>
+
+        <!-- ===== SEARCH ===== -->
+        <div class="search-box">
+            <input type="text" id="searchAdminUser" placeholder="🔍 Search users..." onkeyup="filterAdminUsers()">
+        </div>
+
+        <!-- ===== TABLE ===== -->
+        <table id="adminTable">
+            <tr>
+                <th>ID</th>
+                <th>Username</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Email</th>
+                <th>Actions</th>
+            </tr>
+
+            {% for user in all_users %}
+            <tr class="user-row">
+                <td>{{ user['id'] }}</td>
+                <td class="username">{{ user['username'] }}</td>
+                <td>{{ user['role'] }}</td>
+                <td>{{ user['status'] }}</td>
+                <td>{{ user['email'] }}</td>
+
+                <td class="actions">
+
+                    <!-- ROLE CHANGE -->
+                    <a class="btn-role" href="{{ url_for('change_role', user_id=user['id']) }}">
+                        👑
+                    </a>
+
+                    <!-- TOGGLE -->
+                    <a class="btn-toggle" href="{{ url_for('toggle_user', user_id=user['id']) }}">
+                        🔄
+                    </a>
+
+                    <!-- DELETE -->
+                    {% if user['username'] != session.get('username') %}
+                    <a class="btn-delete" href="{{ url_for('delete_user', user_id=user['id']) }}"
+                        onclick="return confirm('Delete user?')">
+                        🗑
+                    </a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+        {% endif %}
+
+
+        {% if section == "team" %}
+        <h2>Team Management</h2>
+
+        <!-- CREATE BUTTON -->
+        <button class="create-btn" onclick="openCreateModal()">+ Create Team</button>
+
+        <!-- TEAM LIST -->
+        <ul class="team-list">
+            {% for team in teams %}
+            <li>
+                <span>{{ team['name'] }}</span>
+
+                <div class="team-actions">
+                    <!-- EDIT BUTTON -->
+                    <button onclick="openEditModal('{{ team['id'] }}','{{ team['name'] }}')">✏️</button>
+
+                    <!-- DELETE -->
+                    <a href="{{ url_for('delete_team', team_id=team['id']) }}">🗑</a>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+
+
+        <!-- ===== CREATE MODAL ===== -->
+        <div id="createModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeCreateModal()">&times;</span>
+                <h3>Create Team</h3>
+
+                <form method="POST" action="{{ url_for('create_team') }}">
+                    <input type="text" name="team_name" placeholder="Team name" required>
+
+                    <!-- ADD USERS -->
+                    <label>Select Users</label>
+                    <select name="members" multiple>
+                        {% for user in users %}
+                        <option value="{{ user['id'] }}">{{ user['username'] }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <button type="submit">Create</button>
+                </form>
+            </div>
+        </div>
+
+
+        <!-- ===== EDIT MODAL ===== -->
+        <div id="editModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeEditModal()">&times;</span>
+                <h3>Edit Team</h3>
+
+                <form method="POST" action="{{ url_for('edit_team') }}">
+                    <input type="hidden" id="editTeamId" name="team_id">
+
+                    <input type="text" id="editTeamName" name="team_name" required>
+
+                    <!-- ADD USERS -->
+                    <label>Update Members</label>
+                    <select name="members" multiple>
+                        {% for user in users %}
+                        <option value="{{ user['id'] }}">{{ user['username'] }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <button type="submit">Update</button>
+                </form>
+            </div>
+        </div>
+
+        {% endif %}
+    </div>
+
+</div>
+
+
+<script>
+    function filterUsers() {
+        let input = document.getElementById("searchUser");
+        let filter = input.value.toLowerCase();
+        let users = document.getElementsByClassName("user-item");
+
+        for (let i = 0; i < users.length; i++) {
+            let txtValue = users[i].textContent || users[i].innerText;
+            users[i].style.display =
+                txtValue.toLowerCase().indexOf(filter) > -1 ? "" : "none";
+        }
+    }
+</script>
+<script>
+    function openModal() {
+        document.getElementById("teamModal").style.display = "flex";
+    }
+
+    function closeModal() {
+        document.getElementById("teamModal").style.display = "none";
+    }
+
+    // close when clicking outside
+    window.onclick = function (event) {
+        let modal = document.getElementById("teamModal");
+        if (event.target == modal) {
+            modal.style.display = "none";
+        }
+    }
+</script>
+<script>
+    // CREATE MODAL
+    function openCreateModal() {
+        document.getElementById("createModal").style.display = "flex";
+    }
+    function closeCreateModal() {
+        document.getElementById("createModal").style.display = "none";
+    }
+
+    // EDIT MODAL
+    function openEditModal(id, name) {
+        document.getElementById("editModal").style.display = "flex";
+        document.getElementById("editTeamId").value = id;
+        document.getElementById("editTeamName").value = name;
+    }
+
+    function closeEditModal() {
+        document.getElementById("editModal").style.display = "none";
+    }
+
+    // CLOSE OUTSIDE
+    window.onclick = function (e) {
+        if (e.target.classList.contains("modal")) {
+            e.target.style.display = "none";
+        }
+    }
+</script>
+<script>
+function filterAdminUsers() {
+    let input = document.getElementById("searchAdminUser").value.toLowerCase();
+    let rows = document.getElementsByClassName("user-row");
+
+    for (let i = 0; i < rows.length; i++) {
+        let name = rows[i].querySelector(".username").innerText.toLowerCase();
+
+        rows[i].style.display = name.includes(input) ? "" : "none";
+    }
+}
+</script>
