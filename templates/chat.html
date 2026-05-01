@@ -18,40 +18,59 @@
 
         <!-- MENU -->
         <div class="menu">
+            <!-- SHOW CHAT ONLY FOR NORMAL USER -->
+            {% if session.get('role') == 'user' %}
             <a href="{{ url_for('chat_section', section='chat') }}">💬 Chat</a>
+            {% if section == "chat" %}
+            <div class="users-list">
 
-            {% if session.get('role') in ['admin', 'superadmin'] %}
-            <a href="{{ url_for('chat_section', section='admin') }}">All Users</a>
-            {% endif %}
+                <h4 style="margin-top:15px;">Users</h4>
 
-            <a href="{{ url_for('chat_section', section='team') }}">👥 Team</a>
-            <a class="logout" href="{{ url_for('logout') }}">🚪 Logout</a>
-        </div>
+                {% for user in users %}
+                <a href="{{ url_for('chat_section', section='chat', user=user.username) }}" class="user-item">
 
-        <!-- CREATE TEAM -->
-        {% if session.get('role') in ['admin', 'superadmin'] %}
-        <form method="POST" action="{{ url_for('create_team') }}" class="team-form">
-            <input type="text" name="team_name" placeholder="Enter team name" required>
-            <button type="submit">+ Create Team</button>
-        </form>
-        {% endif %}
+                    <div style="display:flex; justify-content:space-between;">
+                        <span>
+                            {{ user.username }}
 
-        <!-- SEARCH -->
-        <div class="user-search">
-            <input type="text" id="searchUser" placeholder="🔍 Search users..." onkeyup="filterUsers()">
-        </div>
+                            {% if user.online %}
+                            <span style="color:lime;">●</span>
+                            {% else %}
+                            <span style="color:gray;">●</span>
+                            {% endif %}
+                        </span>
 
-        <h4>All Users</h4>
+                        {% if user.unread > 0 %}
+                        <span style="background:red; padding:2px 6px; border-radius:10px; font-size:12px;">
+                            {{ user.unread }}
+                        </span>
+                        {% endif %}
+                    </div>
 
-        <!-- USER LIST -->
-        <div id="userList">
-            {% for user in users %}
-            {% if user['username'] != session.get('username') %}
-            <div class="user-item">
-                {{ user['username'] }}
+                    <div style="font-size:12px; color:#ccc;">
+                        {{ user.last_message[:25] }}
+                    </div>
+
+                </a>
+                {% endfor %}
+
             </div>
             {% endif %}
-            {% endfor %}
+
+            <a class="logout" href="{{ url_for('logout') }}">🚪 Logout</a>
+            {% endif %}
+
+            {% if session.get('role') in ['admin', 'superadmin'] %}
+            <a href="{{ url_for('chat_section', section='dashboard') }}">🏠 Dashboard</a>
+            <a href="{{ url_for('chat_section', section='admin') }}">👤 Users</a>
+
+
+            <a href="{{ url_for('chat_section', section='team') }}">👥 Team</a>
+
+            <a href="{{ url_for('chat_section', section='group') }}">🧩 Group</a>
+
+            <a class="logout" href="{{ url_for('logout') }}">🚪 Logout</a>
+            {% endif %}
         </div>
 
     </div>
@@ -59,55 +78,195 @@
 
     <!-- ===== RIGHT SIDE CONTENT ===== -->
     <div class="main-content">
+        <!-- =====Dashboard ===== -->
 
-        {% if section == "chat" %}
-        <h2>Private Chat</h2>
+        {% if section == "dashboard" %}
+        <h2>Dashboard</h2>
 
-        <div class="chat-box">
-            {% for msg in messages %}
-            <div class="message">
-                <strong>{{ msg['sender'] }}</strong>: {{ msg['message'] }}
-            </div>
-            {% else %}
-            <p>No messages yet.</p>
-            {% endfor %}
-        </div>
-
-        <form method="POST" action="{{ url_for('chat_section', section='chat') }}">
-            <select name="receiver" required>
-                {% for user in users %}
-                <option value="{{ user['username'] }}">
-                    {{ user['username'] }}
-                </option>
-                {% endfor %}
-            </select>
-
-            <input type="text" name="message" placeholder="Type message..." required>
-            <button type="submit">Send</button>
-        </form>
-        {% endif %}
-        {% if section == "admin" %}
-        <h2>Admin Dashboard</h2>
-
-        <!-- ===== STATS ===== -->
         <div class="stats">
             <div class="card">
                 <h3>{{ total_users }}</h3>
                 <p>Total Users</p>
             </div>
-
             <div class="card">
                 <h3>{{ active_users }}</h3>
                 <p>Active Users</p>
             </div>
+            <div class="card">
+                <h3>{{ total_teams }}</h3>
+                <p>Total Teams</p>
+            </div>
+            <div class="card">
+                <h3>{{ total_groups }}</h3>
+                <p>Total Groups</p>
+            </div>
         </div>
 
-        <!-- ===== SEARCH ===== -->
+        <h3>Teams</h3>
+        <table>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+            </tr>
+            {% for team in teams %}
+            <tr>
+                <td>{{ team['id'] }}</td>
+                <td>{{ team['name'] }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+
+        <h3>Groups</h3>
+        <table>
+            <tr>
+                <th>ID</th>
+                <th>Name</th>
+            </tr>
+            {% for group in groups %}
+            <tr>
+                <td>{{ group['id'] }}</td>
+                <td>{{ group['name'] }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+
+        {% endif %}
+
+        <!-- =====chat ===== -->
+        {% if section == "chat" %}
+
+        <div class="modern-chat">
+
+            <!-- HEADER -->
+            <div class="chat-header-modern">
+                {% if request.args.get('user') %}
+                <div class="chat-user-info">
+
+                    <div class="chat-avatar">
+                        {{ request.args.get('user')[0] | upper }}
+                    </div>
+
+                    <div>
+                        <h3>{{ request.args.get('user') }}</h3>
+
+                        {% for u in users %}
+                        {% if u.username == request.args.get('user') %}
+                        {% if u.online %}
+                        <span class="status online">● Online</span>
+                        {% else %}
+                        <span class="status offline">● Offline</span>
+                        {% endif %}
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+
+                </div>
+                {% else %}
+                <h3>Select a user to start chatting</h3>
+                {% endif %}
+            </div>
+
+            <!-- MESSAGES -->
+            <div class="chat-messages">
+
+                {% for msg in messages %}
+
+                {% if msg['sender'] == session.get('username') %}
+                <div class="chat-bubble sent">
+
+                    <!-- TEXT -->
+                    {% if msg['message'] %}
+                    <p>{{ msg['message'] }}</p>
+                    {% endif %}
+
+                    <!-- IMAGE -->
+                    {% if msg['image'] %}
+                    <img src="{{ url_for('static', filename='uploads/' + msg['image']) }}">
+                    {% endif %}
+
+                    <!-- FILE -->
+                    {% if msg['file'] %}
+                    <a href="{{ url_for('static', filename='uploads/' + msg['file']) }}" target="_blank">
+                        📄 Download File
+                    </a>
+                    {% endif %}
+
+                    <!-- VOICE -->
+                    {% if msg['voice'] %}
+                    <audio controls>
+                        <source src="{{ url_for('static', filename='uploads/' + msg['voice']) }}">
+                    </audio>
+                    {% endif %}
+
+                </div>
+
+                {% else %}
+                <div class="chat-bubble received">
+
+                    <strong>{{ msg['sender'] }}</strong><br>
+
+                    {% if msg['message'] %}
+                    <p>{{ msg['message'] }}</p>
+                    {% endif %}
+
+                    {% if msg['image'] %}
+                    <img src="{{ url_for('static', filename='uploads/' + msg['image']) }}">
+                    {% endif %}
+
+                    {% if msg['file'] %}
+                    <a href="{{ url_for('static', filename='uploads/' + msg['file']) }}" target="_blank">
+                        📄 Download File
+                    </a>
+                    {% endif %}
+
+                    {% if msg['voice'] %}
+                    <audio controls>
+                        <source src="{{ url_for('static', filename='uploads/' + msg['voice']) }}">
+                    </audio>
+                    {% endif %}
+
+                </div>
+                {% endif %}
+
+                {% endfor %}
+
+            </div>
+
+            <!-- INPUT -->
+            {% if request.args.get('user') %}
+            <form method="POST" enctype="multipart/form-data" class="chat-input-modern">
+
+                <input type="hidden" name="receiver" value="{{ request.args.get('user') }}">
+
+                <!-- TEXT -->
+                <input type="text" name="message" placeholder="Type a message...">
+
+                <!-- FILE -->
+                <input type="file" name="file" id="fileInput" hidden>
+                <label for="fileInput" class="attach-btn">📎</label>
+
+                <!-- VOICE -->
+                <button type="button" onclick="startRecording()">🎤</button>
+
+                <button type="submit">Send</button>
+            </form>
+            {% endif %}
+
+        </div>
+
+        {% endif %}
+
+
+
+        <!-- ===== users ===== -->
+        <!-- SEARCH -->
+        {% if section == "admin" %}
+        <h2>Users Management</h2>
         <div class="search-box">
             <input type="text" id="searchAdminUser" placeholder="🔍 Search users..." onkeyup="filterAdminUsers()">
         </div>
 
-        <!-- ===== TABLE ===== -->
+        <!-- USERS TABLE -->
         <table id="adminTable">
             <tr>
                 <th>ID</th>
@@ -127,18 +286,9 @@
                 <td>{{ user['email'] }}</td>
 
                 <td class="actions">
+                    <a class="btn-role" href="{{ url_for('change_role', user_id=user['id']) }}">👑</a>
+                    <a class="btn-toggle" href="{{ url_for('toggle_user', user_id=user['id']) }}">🔄</a>
 
-                    <!-- ROLE CHANGE -->
-                    <a class="btn-role" href="{{ url_for('change_role', user_id=user['id']) }}">
-                        👑
-                    </a>
-
-                    <!-- TOGGLE -->
-                    <a class="btn-toggle" href="{{ url_for('toggle_user', user_id=user['id']) }}">
-                        🔄
-                    </a>
-
-                    <!-- DELETE -->
                     {% if user['username'] != session.get('username') %}
                     <a class="btn-delete" href="{{ url_for('delete_user', user_id=user['id']) }}"
                         onclick="return confirm('Delete user?')">
@@ -150,31 +300,58 @@
             {% endfor %}
         </table>
         {% endif %}
-
-
         {% if section == "team" %}
+
         <h2>Team Management</h2>
 
-        <!-- CREATE BUTTON -->
-        <button class="create-btn" onclick="openCreateModal()">+ Create Team</button>
+        <button class="btn" onclick="openCreateModal()">
+            + Create Team
+        </button>
 
-        <!-- TEAM LIST -->
-        <ul class="team-list">
-            {% for team in teams %}
-            <li>
-                <span>{{ team['name'] }}</span>
+        {% for team in teams %}
+        <div class="team-card">
 
-                <div class="team-actions">
-                    <!-- EDIT BUTTON -->
-                    <button onclick="openEditModal('{{ team['id'] }}','{{ team['name'] }}')">✏️</button>
+            <!-- TEAM NAME -->
+            <div class="team-header">
+                <h3>{{ team.name }}</h3>
 
-                    <!-- DELETE -->
-                    <a href="{{ url_for('delete_team', team_id=team['id']) }}">🗑</a>
+                <div class="actions">
+
+    <!-- EDIT -->
+    <a href="{{ url_for('edit_team', team_id=team.id) }}">
+        <button type="button">✏️</button>
+    </a>
+
+    <!-- DELETE -->
+    <form action="{{ url_for('delete_team', team_id=team.id) }}" 
+          method="POST" 
+          style="display:inline;">
+        <button type="submit"
+                onclick="return confirm('Delete this team?')">
+            🗑️
+        </button>
+    </form>
+
+</div>
+            </div>
+
+            <!-- TEAM MEMBERS -->
+            <div class="team-members">
+                {% if team_members_map[team.id] %}
+
+                {% for member in team_members_map[team.id] %}
+                <div class="member">
+                    👤 {{ member.username }}
                 </div>
-            </li>
-            {% endfor %}
-        </ul>
+                {% endfor %}
 
+                {% else %}
+                <p class="no-member">No members added</p>
+                {% endif %}
+            </div>
+
+        </div>
+        {% endfor %}
 
         <!-- ===== CREATE MODAL ===== -->
         <div id="createModal" class="modal">
@@ -184,14 +361,6 @@
 
                 <form method="POST" action="{{ url_for('create_team') }}">
                     <input type="text" name="team_name" placeholder="Team name" required>
-
-                    <!-- ADD USERS -->
-                    <label>Select Users</label>
-                    <select name="members" multiple>
-                        {% for user in users %}
-                        <option value="{{ user['id'] }}">{{ user['username'] }}</option>
-                        {% endfor %}
-                    </select>
 
                     <button type="submit">Create</button>
                 </form>
@@ -219,6 +388,50 @@
                     </select>
 
                     <button type="submit">Update</button>
+                </form>
+            </div>
+        </div>
+
+        {% endif %}
+
+        {% if section == "group" %}
+        <h2>Group Management</h2>
+
+        <!-- CREATE BUTTON -->
+        <button class="create-btn" onclick="openGroupModal()">+ Create Group</button>
+
+        <!-- GROUP LIST -->
+        <ul class="team-list">
+            {% for group in groups %}
+            <li>
+                <span>{{ group['name'] }}</span>
+
+                <div class="team-actions">
+                    <button onclick="openEditGroupModal('{{ group['id'] }}','{{ group['name'] }}')">✏️</button>
+
+                    <a href="{{ url_for('delete_group', group_id=group['id']) }}">🗑</a>
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+
+        <!-- CREATE GROUP MODAL -->
+        <div id="groupModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeGroupModal()">&times;</span>
+                <h3>Create Group</h3>
+
+                <form method="POST" action="{{ url_for('create_group') }}">
+                    <input type="text" name="group_name" placeholder="Group name" required>
+
+                    <label>Select Users</label>
+                    <select name="members" multiple>
+                        {% for user in users %}
+                        <option value="{{ user['id'] }}">{{ user['username'] }}</option>
+                        {% endfor %}
+                    </select>
+
+                    <button type="submit">Create</button>
                 </form>
             </div>
         </div>
@@ -287,14 +500,61 @@
     }
 </script>
 <script>
-function filterAdminUsers() {
-    let input = document.getElementById("searchAdminUser").value.toLowerCase();
-    let rows = document.getElementsByClassName("user-row");
+    function filterAdminUsers() {
+        let input = document.getElementById("searchAdminUser").value.toLowerCase();
+        let rows = document.getElementsByClassName("user-row");
 
-    for (let i = 0; i < rows.length; i++) {
-        let name = rows[i].querySelector(".username").innerText.toLowerCase();
+        for (let i = 0; i < rows.length; i++) {
+            let name = rows[i].querySelector(".username").innerText.toLowerCase();
 
-        rows[i].style.display = name.includes(input) ? "" : "none";
+            rows[i].style.display = name.includes(input) ? "" : "none";
+        }
     }
+</script>
+<script>
+    function openGroupModal() {
+        document.getElementById("groupModal").style.display = "flex";
+    }
+
+    function closeGroupModal() {
+        document.getElementById("groupModal").style.display = "none";
+    }
+</script>
+<script>
+let mediaRecorder;
+let audioChunks = [];
+
+async function startRecording() {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+    mediaRecorder = new MediaRecorder(stream);
+
+    audioChunks = [];
+
+    mediaRecorder.ondataavailable = e => {
+        audioChunks.push(e.data);
+    };
+
+    mediaRecorder.onstop = async () => {
+        const blob = new Blob(audioChunks, { type: 'audio/wav' });
+        const file = new File([blob], "voice.wav");
+
+        let formData = new FormData();
+        formData.append("file", file);
+        formData.append("receiver", "{{ request.args.get('user') }}");
+
+        await fetch("/send_message", {
+            method: "POST",
+            body: formData
+        });
+
+        location.reload();
+    };
+
+    mediaRecorder.start();
+
+    setTimeout(() => {
+        mediaRecorder.stop();
+    }, 5000); // 5 sec recording
 }
 </script>
