@@ -1,4 +1,4 @@
-# 💬 Company Chat Application
+# 💬 Time Team Chat Application with Admin Dashboard
 
 A real-time company communication platform built with **Flask**, **Flask-SocketIO**, and **SQLite**. The application enables employees to communicate through private and group chats while providing administrators with tools to manage users and departments.
 
