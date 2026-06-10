@@ -314,7 +314,7 @@ This project is developed for educational and learning purposes. You may modify 
 
 # 👨‍💻 Author
 
-**Rishabh Bhardwaj**
+**Rishabh Sharma**
 
 Python Developer | Full Stack Developer
 
